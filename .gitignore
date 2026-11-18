@@ -1,0 +1,19 @@
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.iml
+android/app/libs/*.aar
+
+# Motor Go
+engine/out/
+engine/sessao/
+
+# Geral
+.DS_Store
+Thumbs.db
+*.keystore
+*.jks
+.env

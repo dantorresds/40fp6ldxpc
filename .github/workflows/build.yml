@@ -1,0 +1,70 @@
+name: APK Atendente IA
+
+# Gera o motor (Go/gomobile) e o APK Android. Só cria arquivos para baixar na
+# aba Actions: não publica release nem loja de apps.
+# Roda nos runners do GitHub.
+
+# Só manual (workflow_dispatch). Também dá para gerar o APK local com scripts/build.ps1.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: "27.2.12479018"
+  GOMOBILE_VERSION: "v0.0.0-20261011034528-197770444867"
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+          cache-dependency-path: engine/go.sum
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Testes do motor
+        working-directory: engine
+        run: go test ./...
+
+      - name: Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Biblioteca Android do motor (gomobile)
+        working-directory: engine
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@$GOMOBILE_VERSION
+          go install golang.org/x/mobile/cmd/gobind@$GOMOBILE_VERSION
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          gomobile init
+          mkdir -p out
+          gomobile bind -target="android/arm64,android/arm" -androidapi 23 -ldflags="-s -w" -javapkg com.atendenteia.wa -o out/waengine.aar ./waengine
+          mkdir -p ../android/app/libs
+          cp out/waengine.aar ../android/app/libs/waengine.aar
+
+      - name: APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug assembleRelease --console=plain
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atendente-ia-apk
+          path: android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
